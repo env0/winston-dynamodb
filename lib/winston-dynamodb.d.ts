@@ -4,6 +4,7 @@ export interface DynamoDBTransportOptions {
     useEnvironment?: boolean;
     accessKeyId?: string;
     secretAccessKey?: string;
+    sessionKey?: string;
     region?: string;
     tableName: string;
     level: string;

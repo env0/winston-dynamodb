@@ -23,6 +23,7 @@
     if (options.useEnvironment) {
       options.accessKeyId = process.env.AWS_ACCESS_KEY_ID;
       options.secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+      options.sessionKey = process.env.AWS_SESSION_TOKEN;
       options.region = process.env.AWS_REGION;
     }
     if (options.accessKeyId == null) {
@@ -42,14 +43,7 @@
     }
     this.name = "dynamodb";
     this.level = options.level || "info";
-    if (options.region == "localhost") {
-      this.db = new AWS.DynamoDB({
-        endpoint: new AWS.Endpoint(options.endpoint)
-      });
-    }
-    else {
-      this.db = new AWS.DynamoDB();
-    }
+    this.db = new AWS.DynamoDB({credentials: {accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey, sessionToken: options.sessionKey}, region: options.region});
     this.AWS = AWS;
     this.region = options.region;
     this.tableName = options.tableName;

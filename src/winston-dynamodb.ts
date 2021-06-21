@@ -14,6 +14,7 @@ export interface DynamoDBTransportOptions {
   useEnvironment?: boolean;
   accessKeyId?: string;
   secretAccessKey?: string;
+  sessionKey?: string;
   region?: string;
   tableName: string;
   level: string;
@@ -46,6 +47,7 @@ export class DynamoDB extends winston.Transport implements DynamoDBTransportInst
     if (options.useEnvironment) {
       options.accessKeyId = process.env.AWS_ACCESS_KEY_ID;
       options.secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+      options.sessionKey = process.env.AWS_SESSION_TOKEN;
       options.region = process.env.AWS_REGION;
     }
     if (options.accessKeyId == null) {
@@ -65,7 +67,7 @@ export class DynamoDB extends winston.Transport implements DynamoDBTransportInst
     }
     this.name = "dynamodb";
     this.level = options.level || "info";
-    this.db = new AWS.DynamoDB({credentials: {accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey}, region: options.region});
+    this.db = new AWS.DynamoDB({credentials: {accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey, sessionToken: options.sessionKey}, region: options.region});
     this.AWS = AWS;
     this.region = options.region;
     this.tableName = options.tableName;
