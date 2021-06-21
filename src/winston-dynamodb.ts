@@ -10,29 +10,6 @@ import { TransportInstance } from 'winston';
 
 const hostname = os.hostname();
 
-function datify(timestamp) {
-  let dateTS = new Date(timestamp);
-  let date = {
-    year: dateTS.getFullYear(),
-    month: dateTS.getMonth() + 1,
-    day: dateTS.getDate(),
-    hour: dateTS.getHours(),
-    minute: dateTS.getMinutes(),
-    second: dateTS.getSeconds(),
-    millisecond: dateTS.getMilliseconds()
-  };
-
-  let keys = _.without(Object.keys(date), "year", "month", "day");
-  let len = keys.length;
-  for (let i = 0; i < len; i++) {
-    let key = keys[i];
-    if (date[key] < 10) {
-      date[key] = "0" + date[key];
-    }
-  }
-  return `${date.year}-${date.month}-${date.day} ${date.hour}:${date.minute}:${date.second}.${date.millisecond}`;
-}
-
 export interface DynamoDBTransportOptions {
   useEnvironment?: boolean;
   accessKeyId?: string;
@@ -41,6 +18,7 @@ export interface DynamoDBTransportOptions {
   tableName: string;
   level: string;
   dynamoDoc?: boolean;
+  partitionKey?: string
 }
 
 export interface DynamoDBTransportInstance extends TransportInstance {
@@ -56,6 +34,7 @@ export class DynamoDB extends winston.Transport implements DynamoDBTransportInst
   region: string;
   tableName: string;
   dynamoDoc: boolean;
+  partitionKey: string;
   
   constructor(options?: DynamoDBTransportOptions) {
     super(options);
@@ -84,24 +63,20 @@ export class DynamoDB extends winston.Transport implements DynamoDBTransportInst
     if (options.tableName == null) {
       throw new Error("need tableName");
     }
-    if (!options.useEnvironment) {
-      AWS.config.update({
-        accessKeyId: options.accessKeyId,
-        secretAccessKey: options.secretAccessKey,
-        region: options.region
-      });
-    }
     this.name = "dynamodb";
     this.level = options.level || "info";
-    this.db = new AWS.DynamoDB();
+    this.db = new AWS.DynamoDB({credentials: {accessKeyId: options.accessKeyId, secretAccessKey: options.secretAccessKey}, region: options.region});
     this.AWS = AWS;
     this.region = options.region;
     this.tableName = options.tableName;
     this.dynamoDoc = options.dynamoDoc;
+    this.partitionKey = options.partitionKey;
   }
 
+  // AREL TODO: Also fix README
+
   log(level, msg, meta, callback) {
-    let dynamoDocClient, params;
+    let params;
     let putCallback = (_this) => {
       return (err, data) => {
         if (err) {
@@ -118,52 +93,33 @@ export class DynamoDB extends winston.Transport implements DynamoDBTransportInst
       };
     };
     putCallback(this);
-    if (this.dynamoDoc === true) {
-      params = {
-        TableName: this.tableName,
-        Item: {
-          id: uuid.v4(),
-          level: level,
-          timestamp: datify(Date.now()),
-          msg: msg,
-          hostname: hostname
+
+    params = {
+      TableName: this.tableName,
+      Item: {
+        id: {
+          "S": this.partitionKey || uuid.v4()
+        },
+        level: {
+          "S": level
+        },
+        timestamp: {
+          "N": new Date().getTime().toString()
+        },
+        msg: {
+          "S": msg
+        },
+        hostname: {
+          "S": hostname
         }
-      };
-      if (!_.isEmpty(meta)) {
-        params.Item.meta = meta;
       }
-      dynamoDocClient = new this.AWS.DynamoDB.DocumentClient({
-        service: this.db
-      });
-      return dynamoDocClient.put(params, putCallback);
-    } else {
-      params = {
-        TableName: this.tableName,
-        Item: {
-          id: {
-            "S": uuid.v4()
-          },
-          level: {
-            "S": level
-          },
-          timestamp: {
-            "S": datify(Date.now())
-          },
-          msg: {
-            "S": msg
-          },
-          hostname: {
-            "S": hostname
-          }
-        }
+    };
+    if (!_.isEmpty(meta)) {
+      params.Item.meta = {
+        "S": JSON.stringify(meta)
       };
-      if (!_.isEmpty(meta)) {
-        params.Item.meta = {
-          "S": JSON.stringify(meta)
-        };
-      }
-      return this.db.putItem(params, putCallback);
     }
+    return this.db.putItem(params, putCallback);
   }
 
 }

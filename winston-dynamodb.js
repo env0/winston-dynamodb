@@ -1,5 +1,5 @@
 (function() {
-  var AWS, DynamoDB, _, datify, hostname, util, uuid, winston,
+  var AWS, DynamoDB, _, hostname, util, uuid, winston,
     indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
   winston = require("winston");
@@ -13,28 +13,6 @@
   _ = require("lodash");
 
   hostname = require("os").hostname();
-
-  datify = function(timestamp) {
-    var date, i, key, keys, len;
-    date = new Date(timestamp);
-    date = {
-      year: date.getFullYear(),
-      month: date.getMonth() + 1,
-      day: date.getDate(),
-      hour: date.getHours(),
-      minute: date.getMinutes(),
-      second: date.getSeconds(),
-      millisecond: date.getMilliseconds()
-    };
-    keys = _.without(Object.keys(date, "year", "month", "day"));
-    for (i = 0, len = keys.length; i < len; i++) {
-      key = keys[i];
-      if (date[key] < 10) {
-        date[key] = "0" + date[key];
-      }
-    }
-    return date.year + "-" + date.month + "-" + date.day + " " + date.hour + ":" + date.minute + ":" + date.second + "." + date.millisecond;
-  };
 
   DynamoDB = exports.DynamoDB = function(options) {
     var ref, regions;
@@ -62,13 +40,6 @@
     if (options.tableName == null) {
       throw new Error("need tableName");
     }
-    if (!options.useEnvironment) {
-      AWS.config.update({
-        accessKeyId: options.accessKeyId,
-        secretAccessKey: options.secretAccessKey,
-        region: options.region
-      });
-    }
     this.name = "dynamodb";
     this.level = options.level || "info";
     if (options.region == "localhost") {
@@ -82,13 +53,14 @@
     this.AWS = AWS;
     this.region = options.region;
     this.tableName = options.tableName;
-    return this.dynamoDoc = options.dynamoDoc;
+    this.dynamoDoc = options.dynamoDoc;
+    return this.partitionKey = options.partitionKey;
   };
 
   util.inherits(DynamoDB, winston.Transport);
 
   DynamoDB.prototype.log = function(level, msg, meta, callback) {
-    var dynamoDocClient, params, putCallback;
+    var params, putCallback;
     putCallback = (function(_this) {
       return function(err, data) {
         if (err) {
@@ -104,52 +76,34 @@
         }
       };
     })(this);
-    if (this.dynamoDoc === true) {
-      params = {
-        TableName: this.tableName,
-        Item: {
-          id: uuid.v4(),
-          level: level,
-          timestamp: datify(Date.now()),
-          msg: msg,
-          hostname: hostname
+
+    params = {
+      TableName: this.tableName,
+      Item: {
+        id: {
+          "S": this.partitionKey || uuid.v4()
+        },
+        level: {
+          "S": level
+        },
+        timestamp: {
+          "N": new Date().getTime().toString()
+        },
+        msg: {
+          "S": msg
+        },
+        hostname: {
+          "S": hostname
         }
-      };
-      if (!_.isEmpty(meta)) {
-        params.Item.meta = meta;
       }
-      dynamoDocClient = new this.AWS.DynamoDB.DocumentClient({
-        service: this.db
-      });
-      return dynamoDocClient.put(params, putCallback);
-    } else {
-      params = {
-        TableName: this.tableName,
-        Item: {
-          id: {
-            "S": uuid.v4()
-          },
-          level: {
-            "S": level
-          },
-          timestamp: {
-            "S": datify(Date.now())
-          },
-          msg: {
-            "S": msg
-          },
-          hostname: {
-            "S": hostname
-          }
-        }
+    };
+    if (!_.isEmpty(meta)) {
+      params.Item.meta = {
+        "S": JSON.stringify(meta)
       };
-      if (!_.isEmpty(meta)) {
-        params.Item.meta = {
-          "S": JSON.stringify(meta)
-        };
-      }
-      return this.db.putItem(params, putCallback);
     }
+    return this.db.putItem(params, putCallback);
+
   };
 
   winston.transports.DynamoDB = DynamoDB;
