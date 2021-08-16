@@ -4,10 +4,12 @@ export interface DynamoDBTransportOptions {
     useEnvironment?: boolean;
     accessKeyId?: string;
     secretAccessKey?: string;
+    sessionKey?: string;
     region?: string;
     tableName: string;
     level: string;
     dynamoDoc?: boolean;
+    partitionKey?: string;
 }
 export interface DynamoDBTransportInstance extends TransportInstance {
     new (options?: DynamoDBTransportOptions): DynamoDBTransportInstance;
@@ -21,6 +23,7 @@ export declare class DynamoDB extends winston.Transport implements DynamoDBTrans
     region: string;
     tableName: string;
     dynamoDoc: boolean;
+    partitionKey: string;
     constructor(options?: DynamoDBTransportOptions);
     log(level: any, msg: any, meta: any, callback: any): any;
 }
